@@ -1,19 +1,10 @@
-✅ JavaScript handler created
-
-const fetch = require('node-fetch');
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const { topic, niche, content_format, emotional_hook } = req.body;
@@ -23,31 +14,19 @@ export default async function handler(req, res) {
     const SHEET_ID = process.env.SHEET_ID;
     const SHEETS_KEY = process.env.SHEETS_KEY_JSON;
 
-    // Get access token for Google Sheets
     const sheetsKey = JSON.parse(SHEETS_KEY);
     const token = await getGoogleToken(sheetsKey);
-
-    // Load patterns from Google Sheets
     const patterns = await loadPatterns(token, SHEET_ID, niche);
     const pattern = findPattern(patterns, niche, content_format, emotional_hook);
 
-    if (!pattern) {
-      throw new Error('No pattern found in database');
-    }
+    if (!pattern) throw new Error('No pattern found');
 
-    // Generate 3 variants
     const variants = ['curiosity', 'shock', 'inspiration'];
     const results = [];
 
     for (const variant of variants) {
-      // Generate prompt via Claude
-      const imagePrompt = await generatePrompt(
-        ANTHROPIC_KEY, topic, niche, content_format, variant, pattern
-      );
-
-      // Generate image via Stability AI
+      const imagePrompt = await generatePrompt(ANTHROPIC_KEY, topic, niche, content_format, variant, pattern);
       const imageB64 = await generateImage(STABILITY_KEY, imagePrompt);
-
       results.push({
         variant,
         image: `data:image/png;base64,${imageB64}`,
@@ -58,33 +37,26 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, thumbnails: results });
 
   } catch (error) {
-    console.error('Handler error:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
 
 async function getGoogleToken(serviceAccount) {
+  const { createSign } = await import('node:crypto');
   const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
+  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const payload = btoa(JSON.stringify({
     iss: serviceAccount.client_email,
     scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
     aud: 'https://oauth2.googleapis.com/token',
     exp: now + 3600,
     iat: now
-  };
+  })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
-  const privateKey = serviceAccount.private_key;
-  const { createSign } = require('crypto');
-
-  const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
-  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signingInput = `${headerB64}.${payloadB64}`;
-
+  const signingInput = `${header}.${payload}`;
   const sign = createSign('RSA-SHA256');
   sign.update(signingInput);
-  const signature = sign.sign(privateKey, 'base64url');
-
+  const signature = sign.sign(serviceAccount.private_key, 'base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const jwt = `${signingInput}.${signature}`;
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -94,45 +66,35 @@ async function getGoogleToken(serviceAccount) {
   });
 
   const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) throw new Error('Failed to get Google token: ' + JSON.stringify(tokenData));
   return tokenData.access_token;
 }
 
 async function loadPatterns(token, sheetId, niche) {
   const tabName = `${niche}_patterns`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}`;
-
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  const FormData = require('formdata-node').FormData;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
   if (!data.values || data.values.length < 2) return {};
-
   const headers = data.values[0];
   const patterns = {};
-
   for (const row of data.values.slice(1)) {
     const rowDict = {};
     headers.forEach((h, i) => { rowDict[h] = row[i] || ''; });
-    const patternId = rowDict.pattern_id;
-    if (patternId) patterns[patternId] = rowDict;
+    if (rowDict.pattern_id) patterns[rowDict.pattern_id] = rowDict;
   }
-
   return patterns;
 }
 
 function findPattern(patterns, niche, contentFormat, emotionalHook) {
   const exact = `${niche}_${contentFormat}_${emotionalHook}`;
   if (patterns[exact]) return patterns[exact];
-
   for (const p of Object.values(patterns)) {
     if (p.niche === niche && p.content_format === contentFormat) return p;
   }
-
   for (const p of Object.values(patterns)) {
     if (p.niche === niche) return p;
   }
-
   return Object.values(patterns)[0] || null;
 }
 
@@ -155,30 +117,29 @@ async function generatePrompt(apiKey, topic, niche, contentFormat, emotionalHook
   });
 
   const data = await res.json();
+  if (!data.content) throw new Error('Claude error: ' + JSON.stringify(data));
   return data.content[0].text.trim();
 }
 
 async function generateImage(apiKey, prompt) {
-  const FormData = (await import('formdata-node')).FormData;
-  const form = new FormData();
-  form.append('prompt', prompt);
-  form.append('aspect_ratio', '16:9');
-  form.append('output_format', 'png');
-  form.append('style_preset', 'photographic');
+  const formData = new FormData();
+  formData.append('prompt', prompt);
+  formData.append('aspect_ratio', '16:9');
+  formData.append('output_format', 'png');
+  formData.append('style_preset', 'photographic');
 
   const res = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
     method: 'POST',
     headers: {
       authorization: `Bearer ${apiKey}`,
-      accept: 'image/*',
-      ...form.headers
+      accept: 'image/*'
     },
-    body: form
+    body: formData
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Stability AI error: ${res.status} ${err}`);
+    throw new Error(`Stability error: ${res.status} ${err}`);
   }
 
   const buffer = await res.arrayBuffer();
