@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "formdata-node": "^6.0.3"
+  }
+}
