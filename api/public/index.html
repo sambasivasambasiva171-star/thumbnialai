@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThumbnailAI — Data-Backed YouTube Thumbnails</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #0a0a0a;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+.nav {
+  background: #111;
+  border-bottom: 1px solid #222;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo { font-size: 22px; font-weight: 800; color: #ff4444; }
+.logo span { color: #fff; }
+
+.badge {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #888;
+}
+
+.hero {
+  text-align: center;
+  padding: 60px 24px 40px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.hero h1 {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+
+.hero h1 span { color: #ff4444; }
+
+.hero p {
+  font-size: 17px;
+  color: #888;
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+
+.generator {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.topic-input {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.topic-input:focus { border-color: #ff4444; }
+.topic-input::placeholder { color: #555; }
+
+.selectors {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.selector-group label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+select {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+}
+
+select:focus { border-color: #ff4444; }
+
+.generate-btn {
+  width: 100%;
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.generate-btn:hover { background: #e03333; transform: translateY(-1px); }
+.generate-btn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+
+.loading {
+  display: none;
+  text-align: center;
+  padding: 60px 24px;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid #222;
+  border-top-color: #ff4444;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading p { color: #888; font-size: 15px; }
+.loading .step { color: #ff4444; font-weight: 600; margin-bottom: 8px; }
+
+.results { display: none; padding: 0 24px 60px; max-width: 760px; margin: 0 auto; }
+
+.results-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding-top: 8px;
+}
+
+.thumbnails-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.thumbnail-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.thumbnail-card:hover { border-color: #ff4444; }
+
+.thumbnail-card.selected { border-color: #ff4444; border-width: 2px; }
+
+.thumb-image-wrapper {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  background: #1a1a1a;
+  cursor: pointer;
+}
+
+.thumb-image-wrapper img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+.variant-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0,0,0,0.8);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.variant-badge.curiosity { color: #60a5fa; }
+.variant-badge.shock { color: #f87171; }
+.variant-badge.inspiration { color: #4ade80; }
+
+.thumb-controls {
+  padding: 16px;
+  border-top: 1px solid #1a1a1a;
+}
+
+.text-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.overlay-text-input {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+.overlay-text-input:focus { border-color: #ff4444; }
+
+.color-pick { width: 38px; height: 38px; border: none; border-radius: 8px; cursor: pointer; }
+
+.size-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.size-row label { font-size: 12px; color: #666; min-width: 40px; }
+.size-row input[type=range] { flex: 1; accent-color: #ff4444; }
+.size-row span { font-size: 13px; color: #ff4444; min-width: 35px; text-align: right; }
+
+.thumb-btn-row { display: flex; gap: 8px; }
+
+.btn-add-text {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 9px;
+  color: #ccc;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add-text:hover { background: #333; color: #fff; }
+
+.btn-download {
+  flex: 1;
+  background: #22c55e;
+  border: none;
+  border-radius: 8px;
+  padding: 9px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-download:hover { opacity: 0.85; }
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+}
+
+canvas.thumb-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  cursor: crosshair;
+}
+
+.text-overlay {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  text-shadow: 2px 2px 8px rgba(0,0,0,0.9);
+  line-height: 1.1;
+  border: 1px dashed transparent;
+}
+
+.text-overlay:hover { border-color: #ff4444; }
+
+.stats-bar {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  padding: 20px 24px;
+  border-top: 1px solid #1a1a1a;
+  margin-top: 20px;
+}
+
+.stat { text-align: center; }
+.stat-number { font-size: 22px; font-weight: 800; color: #ff4444; }
+.stat-label { font-size: 12px; color: #666; margin-top: 2px; }
+
+.error-box {
+  background: #2a1111;
+  border: 1px solid #ff4444;
+  border-radius: 10px;
+  padding: 16px;
+  color: #ff8888;
+  font-size: 14px;
+  margin: 20px 24px;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="logo">Thumbnail<span>AI</span></div>
+  <div class="badge">🔴 Powered by real YouTube data</div>
+</nav>
+
+<div class="hero">
+  <h1>Thumbnails that <span>actually work</span></h1>
+  <p>Built from patterns in 261 top-performing YouTube videos. Not random AI — data-backed thumbnail formulas for your exact niche.</p>
+</div>
+
+<div class="generator">
+  <div class="card">
+    <div class="card-title">📹 Your Video</div>
+    <input
+      type="text"
+      class="topic-input"
+      id="topicInput"
+      placeholder="e.g. I tested every iPhone 17 model for 30 days"
+    />
+    <div class="selectors">
+      <div class="selector-group">
+        <label>Niche</label>
+        <select id="nicheSelect">
+          <option value="Tech">Tech</option>
+          <option value="Fitness">Fitness</option>
+        </select>
+      </div>
+      <div class="selector-group">
+        <label>Content Format</label>
+        <select id="formatSelect">
+          <option value="review">Review</option>
+          <option value="tutorial">Tutorial</option>
+          <option value="challenge">Challenge</option>
+          <option value="explainer">Explainer</option>
+          <option value="vlog">Vlog</option>
+          <option value="news">News</option>
+          <option value="list">List</option>
+        </select>
+      </div>
+      <div class="selector-group">
+        <label>Emotional Hook</label>
+        <select id="hookSelect">
+          <option value="curiosity">Curiosity</option>
+          <option value="shock">Shock</option>
+          <option value="inspiration">Inspiration</option>
+          <option value="excitement">Excitement</option>
+          <option value="controversy">Controversy</option>
+        </select>
+      </div>
+    </div>
+    <button class="generate-btn" id="generateBtn" onclick="generateThumbnails()">
+      <span>⚡</span> Generate 3 Data-Backed Thumbnails
+    </button>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-number">261</div>
+      <div class="stat-label">Videos Analysed</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">24</div>
+      <div class="stat-label">Winning Patterns</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">2</div>
+      <div class="stat-label">Niches Covered</div>
+    </div>
+  </div>
+</div>
+
+<div class="loading" id="loadingState">
+  <div class="loading-spinner"></div>
+  <div class="step" id="loadingStep">Finding your pattern...</div>
+  <p>Analysing top YouTube thumbnails in your niche</p>
+</div>
+
+<div class="error-box" id="errorBox"></div>
+
+<div class="results" id="resultsSection">
+  <div class="results-title">✅ Your 3 Data-Backed Thumbnails</div>
+  <div class="thumbnails-grid" id="thumbnailsGrid"></div>
+</div>
+
+<script>
+const NICHES = ["Tech", "Fitness"];
+let generatedThumbnails = [];
+
+async function generateThumbnails() {
+  const topic = document.getElementById("topicInput").value.trim();
+  if (!topic) {
+    alert("Please enter your video topic first");
+    return;
+  }
+
+  const niche = document.getElementById("nicheSelect").value;
+  const format = document.getElementById("formatSelect").value;
+  const hook = document.getElementById("hookSelect").value;
+
+  document.getElementById("generateBtn").disabled = true;
+  document.getElementById("loadingState").style.display = "block";
+  document.getElementById("resultsSection").style.display = "none";
+  document.getElementById("errorBox").style.display = "none";
+
+  const steps = [
+    "Finding your pattern...",
+    "Reading 261 YouTube videos...",
+    "Building your thumbnail formula...",
+    "Generating Variant 1...",
+    "Generating Variant 2...",
+    "Generating Variant 3...",
+  ];
+
+  let stepIdx = 0;
+  const stepInterval = setInterval(() => {
+    if (stepIdx < steps.length) {
+      document.getElementById("loadingStep").textContent = steps[stepIdx];
+      stepIdx++;
+    }
+  }, 4000);
+
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, niche, content_format: format, emotional_hook: hook })
+    });
+
+    const data = await response.json();
+    clearInterval(stepInterval);
+
+    if (!data.success) throw new Error(data.error || "Generation failed");
+
+    generatedThumbnails = data.thumbnails;
+    displayThumbnails(data.thumbnails, topic);
+
+    document.getElementById("loadingState").style.display = "none";
+    document.getElementById("resultsSection").style.display = "block";
+
+  } catch (err) {
+    clearInterval(stepInterval);
+    document.getElementById("loadingState").style.display = "none";
+    const errorBox = document.getElementById("errorBox");
+    errorBox.textContent = "Error: " + err.message;
+    errorBox.style.display = "block";
+  }
+
+  document.getElementById("generateBtn").disabled = false;
+}
+
+function displayThumbnails(thumbnails, topic) {
+  const grid = document.getElementById("thumbnailsGrid");
+  grid.innerHTML = "";
+
+  thumbnails.forEach((thumb, idx) => {
+    const words = topic.toUpperCase().split(" ").slice(0, 4).join(" ");
+    const suggestedText = thumb.overlay_text || words;
+
+    const card = document.createElement("div");
+    card.className = "thumbnail-card";
+    card.id = `card-${idx}`;
+
+    card.innerHTML = `
+      <div class="canvas-container" id="container-${idx}">
+        <canvas class="thumb-canvas" id="canvas-${idx}"></canvas>
+        <div id="overlays-${idx}" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
+      </div>
+      <div class="thumb-controls">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span class="variant-badge ${thumb.variant}">${thumb.variant.toUpperCase()}</span>
+          <span style="font-size:12px;color:#666;">Drag text to reposition</span>
+        </div>
+        <div class="text-input-row">
+          <input type="text" class="overlay-text-input" id="textInput-${idx}" value="${suggestedText}" placeholder="Add text overlay..." />
+          <input type="color" class="color-pick" id="colorPick-${idx}" value="#ffffff" />
+        </div>
+        <div class="size-row">
+          <label>Size</label>
+          <input type="range" min="16" max="100" value="52" id="sizeRange-${idx}" oninput="document.getElementById('sizeVal-${idx}').textContent=this.value+'px'">
+          <span id="sizeVal-${idx}">52px</span>
+        </div>
+        <div class="thumb-btn-row">
+          <button class="btn-add-text" onclick="addTextOverlay(${idx})">+ Add Text</button>
+          <button class="btn-download" onclick="downloadThumb(${idx})">⬇ Download 1280×720</button>
+        </div>
+      </div>
+    `;
+
+    grid.appendChild(card);
+    loadCanvasImage(idx, thumb.image);
+  });
+}
+
+function loadCanvasImage(idx, imageSrc) {
+  const canvas = document.getElementById(`canvas-${idx}`);
+  const container = document.getElementById(`container-${idx}`);
+  const ctx = canvas.getContext("2d");
+  const img = new Image();
+
+  img.onload = function() {
+    const w = container.clientWidth;
+    const h = w * 9 / 16;
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.drawImage(img, 0, 0, w, h);
+    canvas._img = img;
+  };
+
+  img.src = imageSrc;
+}
+
+function addTextOverlay(idx) {
+  const text = document.getElementById(`textInput-${idx}`).value.trim();
+  const color = document.getElementById(`colorPick-${idx}`).value;
+  const size = document.getElementById(`sizeRange-${idx}`).value;
+
+  if (!text) return;
+
+  const container = document.getElementById(`container-${idx}`);
+  const overlays = document.getElementById(`overlays-${idx}`);
+  overlays.style.pointerEvents = "auto";
+
+  const el = document.createElement("div");
+  el.className = "text-overlay";
+  el.textContent = text;
+  el.style.cssText = `
+    position: absolute;
+    left: 20px;
+    top: 20px;
+    font-size: ${size}px;
+    color: ${color};
+    font-family: Impact, Arial Black, sans-serif;
+    font-weight: 900;
+    cursor: move;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.9), -1px -1px 4px rgba(0,0,0,0.9);
+    user-select: none;
+    pointer-events: auto;
+  `;
+
+  el.dataset.text = text;
+  el.dataset.color = color;
+  el.dataset.size = size;
+
+  makeDraggable(el);
+  overlays.appendChild(el);
+}
+
+function makeDraggable(el) {
+  let dragging = false, sx, sy, sl, st;
+
+  el.addEventListener("mousedown", e => {
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    sl = parseInt(el.style.left) || 0;
+    st = parseInt(el.style.top) || 0;
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    el.style.left = (sl + e.clientX - sx) + "px";
+    el.style.top = (st + e.clientY - sy) + "px";
+  });
+
+  document.addEventListener("mouseup", () => dragging = false);
+
+  el.addEventListener("dblclick", () => el.remove());
+}
+
+function downloadThumb(idx) {
+  const canvas = document.getElementById(`canvas-${idx}`);
+  const overlays = document.getElementById(`overlays-${idx}`);
+  const container = document.getElementById(`container-${idx}`);
+
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = 1280;
+  exportCanvas.height = 720;
+  const ctx = exportCanvas.getContext("2d");
+
+  if (canvas._img) {
+    ctx.drawImage(canvas._img, 0, 0, 1280, 720);
+  } else {
+    ctx.drawImage(canvas, 0, 0, 1280, 720);
+  }
+
+  const scaleX = 1280 / canvas.width;
+  const scaleY = 720 / canvas.height;
+
+  overlays.querySelectorAll(".text-overlay").forEach(el => {
+    const left = parseInt(el.style.left) || 0;
+    const top = parseInt(el.style.top) || 0;
+    const size = parseInt(el.dataset.size) || 52;
+    const color = el.dataset.color || "#ffffff";
+    const text = el.dataset.text || el.textContent;
+
+    const exportSize = Math.round(size * scaleX);
+    const exportX = left * scaleX;
+    const exportY = top * scaleY;
+
+    ctx.font = `900 ${exportSize}px Impact, Arial Black, sans-serif`;
+    ctx.shadowColor = "rgba(0,0,0,0.9)";
+    ctx.shadowBlur = 12;
+
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillText(text, exportX + 3, exportY + exportSize + 3);
+    ctx.fillStyle = color;
+    ctx.fillText(text, exportX, exportY + exportSize);
+  });
+
+  const link = document.createElement("a");
+  link.download = `thumbnailai_${idx + 1}_1280x720.png`;
+  link.href = exportCanvas.toDataURL("image/png");
+  link.click();
+}
+</script>
+</body>
+</html>
