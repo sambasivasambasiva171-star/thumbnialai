@@ -48,42 +48,28 @@ async function generatePrompt(apiKey, topic, niche, contentFormat, emotionalHook
 }
 
 async function generateImage(apiKey, prompt) {
-  const boundary = 'boundary' + Date.now();
-
-  const CRLF = '\r\n';
-
-  function buildField(name, value) {
-    return '--' + boundary + CRLF +
-      'Content-Disposition: form-data; name="' + name + '"' + CRLF +
-      CRLF +
-      value + CRLF;
-  }
-
-  const bodyStr =
-    buildField('prompt', prompt) +
-    buildField('aspect_ratio', '16:9') +
-    buildField('output_format', 'png') +
-    buildField('style_preset', 'photographic') +
-    '--' + boundary + '--' + CRLF;
-
-  const bodyBuffer = Buffer.from(bodyStr, 'utf8');
-
-  const res = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
+  const res = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
     method: 'POST',
     headers: {
-      authorization: 'Bearer ' + apiKey,
-      accept: 'image/*',
-      'content-type': 'multipart/form-data; boundary=' + boundary,
-      'content-length': bodyBuffer.length.toString()
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer ' + apiKey
     },
-    body: bodyBuffer
+    body: JSON.stringify({
+      text_prompts: [{ text: prompt, weight: 1 }],
+      cfg_scale: 7,
+      width: 1344,
+      height: 768,
+      steps: 30,
+      samples: 1
+    })
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error('Stability error: ' + res.status + ' body: ' + err.substring(0, 300));
+    throw new Error('Stability error: ' + res.status + ' ' + err.substring(0, 200));
   }
 
-  const buffer = await res.arrayBuffer();
-  return Buffer.from(buffer).toString('base64');
+  const data = await res.json();
+  return data.artifacts[0].base64;
 }
