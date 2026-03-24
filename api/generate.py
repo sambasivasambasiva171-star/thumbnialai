@@ -1,6 +1,3 @@
-File written successfully
-Now printing content to copy into GitHub:
-
 from http.server import BaseHTTPRequestHandler
 import requests
 import json
