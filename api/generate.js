@@ -1,6 +1,6 @@
 ✅ JavaScript handler created
 
-import fetch from 'node-fetch';
+const fetch = require('node-fetch');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -75,7 +75,7 @@ async function getGoogleToken(serviceAccount) {
   };
 
   const privateKey = serviceAccount.private_key;
-  const { createSign } = await import('crypto');
+  const { createSign } = require('crypto');
 
   const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -105,7 +105,7 @@ async function loadPatterns(token, sheetId, niche) {
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  const data = await res.json();
+  const FormData = require('formdata-node').FormData;
   if (!data.values || data.values.length < 2) return {};
 
   const headers = data.values[0];
