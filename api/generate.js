@@ -131,7 +131,8 @@ async function generateImage(apiKey, prompt) {
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error('Stability error: ' + res.status + ' ' + err);
+    const status = res.status;
+    throw new Error('STABILITY_DEBUG: status=' + status + ' body=' + err.substring(0, 200));
   }
 
   const buffer = await res.arrayBuffer();
