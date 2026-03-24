@@ -29,7 +29,6 @@ export default async function handler(req, res) {
 
 async function generatePrompt(apiKey, topic, niche, contentFormat, emotionalHook) {
   const prompt = 'Write ONE Stability AI image prompt for a YouTube thumbnail. Topic: ' + topic + '. Style: photorealistic, 16:9, person with ' + emotionalHook + ' expression, no text in image. Return ONLY the prompt.';
-
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -43,27 +42,41 @@ async function generatePrompt(apiKey, topic, niche, contentFormat, emotionalHook
       messages: [{ role: 'user', content: prompt }]
     })
   });
-
   const data = await res.json();
   if (!data.content) throw new Error('Claude error: ' + JSON.stringify(data));
   return data.content[0].text.trim();
 }
 
 async function generateImage(apiKey, prompt) {
-  const params = new URLSearchParams();
-  params.append('prompt', prompt);
-  params.append('aspect_ratio', '16:9');
-  params.append('output_format', 'png');
-  params.append('style_preset', 'photographic');
+  const boundary = 'boundary' + Date.now();
+
+  const CRLF = '\r\n';
+
+  function buildField(name, value) {
+    return '--' + boundary + CRLF +
+      'Content-Disposition: form-data; name="' + name + '"' + CRLF +
+      CRLF +
+      value + CRLF;
+  }
+
+  const bodyStr =
+    buildField('prompt', prompt) +
+    buildField('aspect_ratio', '16:9') +
+    buildField('output_format', 'png') +
+    buildField('style_preset', 'photographic') +
+    '--' + boundary + '--' + CRLF;
+
+  const bodyBuffer = Buffer.from(bodyStr, 'utf8');
 
   const res = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
     method: 'POST',
     headers: {
       authorization: 'Bearer ' + apiKey,
       accept: 'image/*',
-      'content-type': 'application/x-www-form-urlencoded'
+      'content-type': 'multipart/form-data; boundary=' + boundary,
+      'content-length': bodyBuffer.length.toString()
     },
-    body: params.toString()
+    body: bodyBuffer
   });
 
   if (!res.ok) {
