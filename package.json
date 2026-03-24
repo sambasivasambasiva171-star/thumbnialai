@@ -1,9 +1,5 @@
 {
   "scripts": {
-    "vercel-build": "echo build complete"
-  },
-  "dependencies": {
-    "node-fetch": "2.6.9",
-    "formdata-node": "4.4.1"
+    "vercel-build": "echo done"
   }
 }
