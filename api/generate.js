@@ -1,4 +1,4 @@
-File written successfully
+Done - copy everything below this line into GitHub api/generate.js
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       const imageB64 = await generateImage(STABILITY_KEY, imagePrompt);
       results.push({
         variant,
-        image: `data:image/png;base64,${imageB64}`,
+        image: 'data:image/png;base64,' + imageB64,
         overlay_text: getOverlayText(topic, variant)
       });
     }
@@ -130,19 +130,36 @@ async function generatePrompt(apiKey, topic, niche, contentFormat, emotionalHook
 }
 
 async function generateImage(apiKey, prompt) {
-  const formData = new FormData();
-  formData.append('prompt', prompt);
-  formData.append('aspect_ratio', '16:9');
-  formData.append('output_format', 'png');
-  formData.append('style_preset', 'photographic');
+  const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+
+  const body = [
+    '--' + boundary,
+    'Content-Disposition: form-data; name="prompt"',
+    '',
+    prompt,
+    '--' + boundary,
+    'Content-Disposition: form-data; name="aspect_ratio"',
+    '',
+    '16:9',
+    '--' + boundary,
+    'Content-Disposition: form-data; name="output_format"',
+    '',
+    'png',
+    '--' + boundary,
+    'Content-Disposition: form-data; name="style_preset"',
+    '',
+    'photographic',
+    '--' + boundary + '--'
+  ].join('\r\n');
 
   const res = await fetch('https://api.stability.ai/v2beta/stable-image/generate/core', {
     method: 'POST',
     headers: {
       authorization: 'Bearer ' + apiKey,
-      accept: 'image/*'
+      accept: 'image/*',
+      'content-type': 'multipart/form-data; boundary=' + boundary
     },
-    body: formData
+    body: body
   });
 
   if (!res.ok) {
@@ -160,4 +177,3 @@ function getOverlayText(topic, variant) {
   if (variant === 'shock') return "YOU WON'T BELIEVE THIS";
   return words.slice(0, 3).join(' ');
 }
-
